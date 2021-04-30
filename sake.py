@@ -3,6 +3,8 @@ import json
 import os
 from datetime import datetime
 from pathlib import Path
+import subprocess
+import sys
 
 from rich import box
 from rich.console import Console
@@ -154,7 +156,8 @@ def list_experiments(args):
         )
 
     console = Console()
-    console.print(table)
+    with console.pager():
+        console.print(table)
 
 
 def show_experiment(args):
@@ -175,7 +178,11 @@ def parse_args():
     show.add_argument("id")
     show.set_defaults(func=show_experiment)
 
-    return parser.parse_args()
+    args = parser.parse_args()
+    if getattr(args, "func", None) is None:
+        parser.print_help()
+        exit(1)
+    return args
 
 
 def main() -> None:

@@ -33,8 +33,10 @@ class Experiment(object):
     def _present(values):
         def maybe_trim(value: str):
             # TODO: trim after ":"
-            if len(value) > 30:
-                value = value[:27] + "..."
+            MAX_LENGTH = 60
+            if len(value) > MAX_LENGTH:
+                split_idx = max(MAX_LENGTH-3, value.index(":"))
+                value = value[:split_idx] + "..."
             return value
 
         NUM_VALUES = 5
@@ -44,15 +46,26 @@ class Experiment(object):
         values = [maybe_trim(value) for value in values]
         return "\n".join(values)
 
-    def get_params(self, _select):
-        values = [f"{key}: {value}" for key, value in self.params.items()]
+    @staticmethod
+    def _select(values, select):
+        items = values.items()
+        if select is None or all([name not in values.keys() for name in select]):
+            return items
+        
+        items = filter(lambda x: x[0] in select, items)
+        return items
+
+    def get_params(self, select):
+        items = self._select(self.params, select)
+        values = [f"{key}: {value}" for key, value in items]
         return self._present(values)
 
     def get_metrics(self, select):
         if self.checkpoints is None:
             return "0 checkpoints"
-        name, checkpoint = self.get_best_checkpoint() 
-        metrics = sorted(checkpoint["metrics"].items(), key=lambda x: -int(x[0] == name))
+        name, checkpoint = self.get_best_checkpoint()
+        items = self._select(checkpoint["metrics"], select)
+        metrics = sorted(items, key=lambda x: -int(x[0] == name))
         step = checkpoint["step"]
         values = [f"step {step} (best)"] + [
             f"{key}: {value}"

@@ -129,6 +129,7 @@ class KeepsakeRepository(object):
 def compile_filter(format):
     # TODO: < > >= <=
     # TODO: handle numbers
+
     if " or " in format:
         lhs_format, rhs_format = format.split(" or ")
         lhs, rhs = compile_filter(lhs_format), compile_filter(rhs_format)
@@ -137,12 +138,12 @@ def compile_filter(format):
     if "!=" in format:
         field, value = format.split("!=")
         field, value = field.strip(), value.strip()
-        return lambda expe: expe.get_field(field) != value
+        return lambda expe: str(expe.get_field(field)) != value
 
     if "=" in format:
         field, value = format.split("=")
         field, value = field.strip(), value.strip()
-        return lambda expe: expe.get_field(field) == value
+        return lambda expe: str(expe.get_field(field)) == value
 
 
 def list_experiments(args):
@@ -159,6 +160,8 @@ def list_experiments(args):
     experiments = [
         expe for expe in experiments if all(filter(expe) for filter in filters)
     ]
+    if args.sort is not None:
+        experiments = sorted(experiments, key=lambda expe: expe.get_field(args.sort))
 
     for expe in experiments:
         table.add_row(
@@ -174,7 +177,7 @@ def list_experiments(args):
 
 
 def show_experiment(args):
-    print("show", args)
+    raise NotImplementedError()
 
 
 def parse_args():

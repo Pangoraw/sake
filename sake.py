@@ -162,17 +162,22 @@ def list_experiments(args):
     ]
     if args.sort is not None:
         experiments = sorted(experiments, key=lambda expe: expe.get_field(args.sort))
+    else:
+        experiments = sorted(experiments, key=lambda expe: expe.created)
 
     for expe in experiments:
         table.add_row(
-            expe.id[:8],
+            expe.id[:7],
             expe.created.strftime("%H:%M\n%D"),
             expe.get_params(args.select),
             expe.get_metrics(args.select),
         )
 
     console = Console()
-    with console.pager():
+    if len(experiments) > 5:
+        with console.pager():
+            console.print(table)
+    else:
         console.print(table)
 
 

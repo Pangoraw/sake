@@ -23,6 +23,10 @@ class Experiment(object):
         if field in self.params:
             return self.params[field]
 
+        _, best_checkpoint = self.get_best_checkpoint()
+        if field in best_checkpoint["metrics"]:
+            return best_checkpoint["metrics"][field]
+
         for checkpoint in self.checkpoints:
             if field in checkpoint["metrics"]:
                 return checkpoint["metrics"][field]
@@ -145,11 +149,22 @@ class KeepsakeRepository(object):
                 return Path(location[7:])
         raise Exception("repository not found in keepsake.yml")
 
+class Filter:
+    def __init__(self, comp, field, value):
+        self.comp = comp
+        self.field = field
+        self.value = value
+
+    def __call__(self, expe):
+        field = expe.get_field(self.field)
+        try:
+            comp_value = type(field)(self.value)
+        except:
+            comp_value = self.value
+
+        return self.comp(field, comp_value) 
 
 def compile_filter(format):
-    # TODO: < > >= <=
-    # TODO: handle numbers
-
     if " or " in format:
         lhs_format, rhs_format = format.split(" or ")
         lhs, rhs = compile_filter(lhs_format), compile_filter(rhs_format)
@@ -158,13 +173,33 @@ def compile_filter(format):
     if "!=" in format:
         field, value = format.split("!=")
         field, value = field.strip(), value.strip()
-        return lambda expe: str(expe.get_field(field)) != value
+        return Filter(lambda a, b: a != b, field, value)
 
     if "=" in format:
         field, value = format.split("=")
         field, value = field.strip(), value.strip()
-        return lambda expe: str(expe.get_field(field)) == value
+        return Filter(lambda a, b: a == b, field, value)
 
+    if "<" in format:
+        field, value = format.split("<")
+        field, value = field.strip(), value.strip()
+        return Filter(lambda a, b: a < b, field, value)
+
+    if "<=" in format:
+        field, value = format.split("<=")
+        field, value = field.strip(), value.strip()
+        return Filter(lambda a, b: a <= b, field, value)
+    
+    if ">" in format:
+        field, value = format.split(">")
+        field, value = field.strip(), value.strip()
+        return Filter(lambda a, b: a > b, field, value)
+
+    if ">=" in format:
+        field, value = format.split(">=")
+        field, value = field.strip(), value.strip()
+        return Filter(lambda a, b: a >= b, field, value)
+    
 
 def list_experiments(args):
     repo = KeepsakeRepository()

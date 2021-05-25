@@ -30,7 +30,10 @@ class Experiment(object):
         return None
 
     @staticmethod
-    def _present(values):
+    def _present(values, num_values=5):
+        if num_values is None:
+            num_values = 5
+
         def maybe_trim(value: str):
             # TODO: trim after ":"
             MAX_LENGTH = 60
@@ -39,9 +42,8 @@ class Experiment(object):
                 value = value[:split_idx] + "..."
             return value
 
-        NUM_VALUES = 5
-        if len(values) >= NUM_VALUES:
-            values = values[:NUM_VALUES] + ["..."]
+        if len(values) >= num_values:
+            values = values[:num_values+1] + ["..."]
 
         values = [maybe_trim(value) for value in values]
         return "\n".join(values)
@@ -50,13 +52,14 @@ class Experiment(object):
     def _select(values, select):
         items = values.items()
         if select is None or all([name not in values.keys() for name in select]):
-            return items
+            return items, False
         
-        items = filter(lambda x: x[0] in select, items)
-        return items
+        n_before = len(items)
+        items = list(filter(lambda x: x[0] in select, items))
+        return items, n_before != len(items)
 
     def get_params(self, select):
-        items = self._select(self.params, select)
+        items, _ = self._select(self.params, select)
         values = [f"{key}: {value}" for key, value in items]
         return self._present(values)
 
@@ -64,14 +67,14 @@ class Experiment(object):
         if self.checkpoints is None:
             return "0 checkpoints"
         name, checkpoint = self.get_best_checkpoint()
-        items = self._select(checkpoint["metrics"], select)
+        items, selected = self._select(checkpoint["metrics"], select)
         metrics = sorted(items, key=lambda x: -int(x[0] == name))
         step = checkpoint["step"]
         values = [f"step {step} (best)"] + [
             f"{key}: {value}"
             for key, value in metrics
         ]
-        return self._present(values)
+        return self._present(values, num_values=len(items) if selected else None)
 
     def get_best_checkpoint(self):
         metrics = {}
@@ -105,14 +108,31 @@ class KeepsakeRepository(object):
     def __init__(self):
         self.location = self._get_location()
 
-    def get_experiments(self):
+    def _get_experiments_files(self):
         metadata_dir = self.location / "metadata/experiments"
         experiment_files = os.listdir(metadata_dir)
+        return [
+            os.path.join(metadata_dir, experiment_file)
+            for experiment_file in experiment_files
+        ]
+
+    def get_experiments(self):
+        experiment_files = self._get_experiments_files()
         experiments = [
-            Experiment.from_file(metadata_dir / file_path)
+            Experiment.from_file(file_path)
             for file_path in experiment_files
         ]
         return experiments
+
+    def get_experiment(self, expe_partial_id):
+        experiment_files = self._get_experiments_files()
+        experiment_files= list(filter(lambda f: os.path.basename(f).startswith(expe_partial_id), experiment_files))
+        n_expe = len(experiment_files)
+        if n_expe >= 2:
+            raise Exception(f"Found {n_expe} experiments with id '{expe_partial_id}'")
+        if n_expe == 0:
+            raise KeyError(expe_partial_id)
+        return Experiment.from_file(experiment_files[0])
 
     @staticmethod
     def _get_location():
@@ -150,12 +170,6 @@ def list_experiments(args):
     repo = KeepsakeRepository()
     experiments = repo.get_experiments()
 
-    table = Table(title="Experiments", box=box.ROUNDED)
-    table.add_column("id", justify="center")
-    table.add_column("Created", justify="center")
-    table.add_column("Params")
-    table.add_column("Checkpoints")
-
     filters = [compile_filter(raw_filter) for raw_filter in args.filter]
     experiments = [
         expe for expe in experiments if all(filter(expe) for filter in filters)
@@ -164,6 +178,17 @@ def list_experiments(args):
         experiments = sorted(experiments, key=lambda expe: expe.get_field(args.sort))
     else:
         experiments = sorted(experiments, key=lambda expe: expe.created)
+
+    if args.quiet:
+        for experiment in experiments:
+            print(experiment.id)
+        return
+
+    table = Table(title="Experiments", box=box.ROUNDED)
+    table.add_column("id", justify="center")
+    table.add_column("Created", justify="center")
+    table.add_column("Parameters")
+    table.add_column("Checkpoints")
 
     for expe in experiments:
         table.add_row(
@@ -192,6 +217,7 @@ def parse_args():
     ls = commands.add_parser("list", aliases=["ls"])
     ls.add_argument("-f", "--filter", default=[], action="append")
     ls.add_argument("-s", "--select", action="append")
+    ls.add_argument("-q", "--quiet", action="store_true", help="return only the ids")
     ls.add_argument("--sort")
     ls.set_defaults(func=list_experiments)
 

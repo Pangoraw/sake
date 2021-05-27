@@ -9,6 +9,7 @@ import sys
 from rich import box
 from rich.console import Console
 from rich.table import Table
+from rich.prompt import Confirm
 
 
 class Experiment(object):
@@ -18,6 +19,7 @@ class Experiment(object):
         self.created = datetime.fromisoformat(date)
         self.params = expe_json["params"]
         self.checkpoints = expe_json["checkpoints"]
+        self.command = expe_json["command"]
 
     def get_field(self, field):
         if field in self.params:
@@ -162,7 +164,12 @@ class Filter:
         except:
             comp_value = self.value
 
-        return self.comp(field, comp_value) 
+        try:
+            res = self.comp(field, comp_value) 
+        except:
+            res = False
+
+        return res
 
 def compile_filter(format):
     if " or " in format:
@@ -245,6 +252,25 @@ def show_experiment(args):
     raise NotImplementedError()
 
 
+def reproduce_experiment(args):
+    repo = KeepsakeRepository()
+    expe = repo.get_experiment(args.id)
+
+    console = Console()
+
+    command = f"python {expe.command}"
+    console.print(f"Command for experiment [cyan]{expe.id[:7]}[/cyan] is:")
+    console.print(f"\n{command}\n")
+
+    if not args.yes:
+        yes = Confirm.ask(f"Do you want to run it?")
+        if not yes:
+            console.print("Aborting")
+            return
+
+    os.system(command)
+
+
 def parse_args():
     parser = argparse.ArgumentParser("sake")
     commands = parser.add_subparsers()
@@ -259,6 +285,12 @@ def parse_args():
     show = commands.add_parser("show")
     show.add_argument("id")
     show.set_defaults(func=show_experiment)
+
+    repr_parser = commands.add_parser("repr", aliases=["reproduce"])
+    repr_parser.add_argument("id")
+    repr_parser.add_argument("-y", "--yes", action="store_true", 
+                             help="do not ask for confirmation")
+    repr_parser.set_defaults(func=reproduce_experiment)
 
     args = parser.parse_args()
     if getattr(args, "func", None) is None:

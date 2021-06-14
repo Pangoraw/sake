@@ -64,9 +64,15 @@ class Experiment(object):
         items = list(filter(lambda x: x[0] in select, items))
         return items, n_before != len(items)
 
+    @staticmethod
+    def _present_value(value):
+        if False and isinstance(value, float):
+            return f"{value:.3f}"
+        return value
+
     def get_params(self, select):
         items, _ = self._select(self.params, select)
-        values = [f"{key}: {value}" for key, value in items]
+        values = [f"{key}: {self._present_value(value)}" for key, value in items]
         return self._present(values)
 
     def get_metrics(self, select):
@@ -77,7 +83,7 @@ class Experiment(object):
         metrics = sorted(items, key=lambda x: -int(x[0] == name))
         step = checkpoint["step"]
         values = [f"step {step} (best)"] + [
-            f"{key}: {value}"
+            f"{key}: {self._present_value(value)}"
             for key, value in metrics
         ]
         return self._present(values, num_values=len(items) if selected else None)

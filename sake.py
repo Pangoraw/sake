@@ -6,10 +6,11 @@ from pathlib import Path
 import subprocess
 import sys
 
-from rich import box
-from rich.console import Console
+from rich import box, print
+from rich.console import Console, RenderGroup
 from rich.table import Table
 from rich.prompt import Confirm
+from rich.panel import Panel
 
 
 class Experiment(object):
@@ -21,10 +22,12 @@ class Experiment(object):
         self.checkpoints = expe_json["checkpoints"]
         self.command = expe_json["command"]
 
-    def get_field(self, field):
+    def get_field(self, field, default_val=None):
         if field in self.params:
             return self.params[field]
 
+        if self.checkpoints is None:
+            return default_val
         _, best_checkpoint = self.get_best_checkpoint()
         if field in best_checkpoint["metrics"]:
             return best_checkpoint["metrics"][field]
@@ -33,7 +36,7 @@ class Experiment(object):
             if field in checkpoint["metrics"]:
                 return checkpoint["metrics"][field]
 
-        return None
+        return default_val
 
     @staticmethod
     def _present(values, num_values=5):
@@ -70,12 +73,12 @@ class Experiment(object):
             return f"{value:.3f}"
         return value
 
-    def get_params(self, select):
+    def get_params(self, select=[]):
         items, _ = self._select(self.params, select)
         values = [f"{key}: {self._present_value(value)}" for key, value in items]
         return self._present(values)
 
-    def get_metrics(self, select):
+    def get_metrics(self, select=[]):
         if self.checkpoints is None:
             return "0 checkpoints"
         name, checkpoint = self.get_best_checkpoint()
@@ -188,31 +191,33 @@ def compile_filter(format):
         field, value = field.strip(), value.strip()
         return Filter(lambda a, b: a != b, field, value)
 
-    if "=" in format:
-        field, value = format.split("=")
+    if "<=" in format:
+        field, value = format.split("<=")
         field, value = field.strip(), value.strip()
-        return Filter(lambda a, b: a == b, field, value)
+        return Filter(lambda a, b: a <= b, field, value)
+    
+    if ">=" in format:
+        field, value = format.split(">=")
+        field, value = field.strip(), value.strip()
+        return Filter(lambda a, b: a >= b, field, value)
 
     if "<" in format:
         field, value = format.split("<")
         field, value = field.strip(), value.strip()
         return Filter(lambda a, b: a < b, field, value)
 
-    if "<=" in format:
-        field, value = format.split("<=")
+    if "=" in format:
+        field, value = format.split("=")
         field, value = field.strip(), value.strip()
-        return Filter(lambda a, b: a <= b, field, value)
-    
+        return Filter(lambda a, b: a == b, field, value)
+
     if ">" in format:
         field, value = format.split(">")
         field, value = field.strip(), value.strip()
         return Filter(lambda a, b: a > b, field, value)
 
-    if ">=" in format:
-        field, value = format.split(">=")
-        field, value = field.strip(), value.strip()
-        return Filter(lambda a, b: a >= b, field, value)
-    
+    raise Exception(f"invalid filter format '{format}'")
+
 
 def list_experiments(args):
     repo = KeepsakeRepository()
@@ -223,7 +228,7 @@ def list_experiments(args):
         expe for expe in experiments if all(filter(expe) for filter in filters)
     ]
     if args.sort is not None:
-        experiments = sorted(experiments, key=lambda expe: expe.get_field(args.sort))
+        experiments = sorted(experiments, key=lambda expe: expe.get_field(args.sort, 0.0))
     else:
         experiments = sorted(experiments, key=lambda expe: expe.created)
 
@@ -255,7 +260,14 @@ def list_experiments(args):
 
 
 def show_experiment(args):
-    raise NotImplementedError()
+    repo = KeepsakeRepository()
+    expe = repo.get_experiment(args.id)
+
+    print(Panel(RenderGroup(
+        Panel(expe.command, box=box.SIMPLE, title="Command"),
+        Panel(expe.get_params(args.select), box=box.SIMPLE, title="Parameters"),
+        Panel(expe.get_metrics(args.select), box=box.SIMPLE, title="Checkpoint")
+    ), title=f"Experiment {expe.id[:7]}"))
 
 
 def reproduce_experiment(args):
@@ -290,6 +302,7 @@ def parse_args():
 
     show = commands.add_parser("show")
     show.add_argument("id")
+    show.add_argument("-s", "--select", action="append")
     show.set_defaults(func=show_experiment)
 
     repr_parser = commands.add_parser("repr", aliases=["reproduce"])

@@ -2,6 +2,7 @@ import argparse
 import json
 import os
 from datetime import datetime
+from dateutil import parser
 from pathlib import Path
 import subprocess
 import sys
@@ -167,11 +168,18 @@ class Filter:
         self.value = value
 
     def __call__(self, expe):
-        field = expe.get_field(self.field)
-        try:
-            comp_value = type(field)(self.value)
-        except:
-            comp_value = self.value
+        if self.field == "created":
+            field = expe.created
+            try:
+                comp_value = parser.parse(self.value, parser.parserinfo(dayfirst=True))
+            except:
+                comp_value = self.value
+        else:
+            field = expe.get_field(self.field)
+            try:
+                comp_value = type(field)(self.value)
+            except:
+                comp_value = self.value
 
         try:
             res = self.comp(field, comp_value) 

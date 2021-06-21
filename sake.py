@@ -272,10 +272,10 @@ def show_experiment(args):
     expe = repo.get_experiment(args.id)
 
     print(Panel(RenderGroup(
-        Panel(expe.command, box=box.SIMPLE, title="Command"),
+        Panel(f"python {expe.command}", box=box.SIMPLE, title="Command"),
         Panel(expe.get_params(args.select), box=box.SIMPLE, title="Parameters"),
         Panel(expe.get_metrics(args.select), box=box.SIMPLE, title="Checkpoint")
-    ), title=f"Experiment {expe.id[:7]}"))
+    ), box=box.SIMPLE, title=f"Experiment {expe.id[:7]}"))
 
 
 def reproduce_experiment(args):

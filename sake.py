@@ -7,7 +7,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from rich import box, print
+from rich import box
 from rich.console import Console, RenderGroup
 from rich.table import Table
 from rich.prompt import Confirm
@@ -78,6 +78,18 @@ class Experiment(object):
         items, _ = self._select(self.params, select)
         values = [f"{key}: {self._present_value(value)}" for key, value in items]
         return self._present(values)
+
+    def get_keys(self):
+        metrics = self.get_metrics()
+        return metrics.keys()
+
+    def _get_metrics(self, select=[]):
+        if self.checkpoints is None:
+            return []
+        name, checkpoint = self.get_best_checkpoint()
+        items, selected = self._select(checkpoint["metrics"], select)
+        metrics = sorted(items, key=lambda x: -int(x[0] == name))
+        return metrics
 
     def get_metrics(self, select=[]):
         if self.checkpoints is None:
@@ -271,12 +283,54 @@ def show_experiment(args):
     repo = KeepsakeRepository()
     expe = repo.get_experiment(args.id)
 
-    print(Panel(RenderGroup(
+    console = Console()
+    console.print(Panel(RenderGroup(
         Panel(f"python {expe.command}", box=box.SIMPLE, title="Command"),
         Panel(expe.get_params(args.select), box=box.SIMPLE, title="Parameters"),
         Panel(expe.get_metrics(args.select), box=box.SIMPLE, title="Checkpoint")
     ), box=box.SIMPLE, title=f"Experiment {expe.id[:7]}"))
 
+
+def diff_experiments(args):
+    repo = KeepsakeRepository()
+    expe1 = repo.get_experiment(args.id1)
+    expe2 = repo.get_experiment(args.id2)
+
+    get_keys = lambda metrics: set(map(lambda metric: metric[0], metrics))
+
+    console = Console()
+
+    keys = get_keys(expe1._get_metrics()).union(get_keys(expe2._get_metrics()))
+
+    def get_key(d, k, v=None):
+        try:
+            return d[k]
+        except:
+            return v
+
+    params = set(expe1.params.keys()).union(set(expe2.params.keys()))
+
+    table = Table(title="Params", box=box.ROUNDED)
+    table.add_column("Parameter")
+    table.add_column(expe1.id[:7])
+    table.add_column(expe2.id[:7])
+    for param in params:
+        value1 = get_key(expe1.params, param, None) 
+        value2 =  get_key(expe2.params, param, None)
+        if value1 != value2:
+            table.add_row(param, str(value1), str(value2))
+    console.print(table)
+
+    table = Table(title="Metrics", box=box.ROUNDED)
+    table.add_column("Metric")
+    table.add_column(expe1.id[:7])
+    table.add_column(expe2.id[:7])
+    for key in keys:
+        value1, value2 = expe1.get_field(key), expe2.get_field(key)
+        if value1 != value2:
+            table.add_row(key, str(value1), str(value2))
+
+    console.print(table)
 
 def reproduce_experiment(args):
     repo = KeepsakeRepository()
@@ -312,6 +366,11 @@ def parse_args():
     show.add_argument("id")
     show.add_argument("-s", "--select", action="append")
     show.set_defaults(func=show_experiment)
+
+    diff = commands.add_parser("diff")
+    diff.add_argument("id1")
+    diff.add_argument("id2")
+    diff.set_defaults(func=diff_experiments)
 
     repr_parser = commands.add_parser("repr", aliases=["reproduce"])
     repr_parser.add_argument("id")

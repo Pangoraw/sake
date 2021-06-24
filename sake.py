@@ -3,6 +3,7 @@ import json
 import os
 from datetime import datetime
 from dateutil import parser
+from functools import partial
 from pathlib import Path
 import subprocess
 import sys
@@ -173,6 +174,14 @@ class KeepsakeRepository(object):
                 return Path(location[7:])
         raise Exception("repository not found in keepsake.yml")
 
+
+def try_fallback(func, default_val):
+    try:
+        return func(default_val)
+    except:
+        return default_val
+
+
 class Filter:
     def __init__(self, comp, field, value):
         self.comp = comp
@@ -182,17 +191,15 @@ class Filter:
     def __call__(self, expe):
         if self.field == "created":
             field = expe.created
-            try:
-                comp_value = parser.parse(self.value, parser.parserinfo(dayfirst=True))
-            except:
-                comp_value = self.value
+            convert_func = partial(parser.parse, parserinfo=parser.parserinfo(dayfirst=True))
+        elif self.field == "n_checkpoints":
+            field = len(expe.checkpoints) if expe.checkpoints is not None else 0
+            convert_func = int
         else:
             field = expe.get_field(self.field)
-            try:
-                comp_value = type(field)(self.value)
-            except:
-                comp_value = self.value
+            convert_func = type(field)
 
+        comp_value = try_fallback(convert_func, self.value)
         try:
             res = self.comp(field, comp_value) 
         except:

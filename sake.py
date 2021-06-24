@@ -213,6 +213,11 @@ def compile_filter(format):
         lhs, rhs = compile_filter(lhs_format), compile_filter(rhs_format)
         return lambda expe: lhs(expe) or rhs(expe)
 
+    if " in " in format:
+        value, field = format.split(" in ")
+        field, value = field.strip(), value.strip()
+        return Filter(lambda a, b: b in a, field, value)
+
     if "!=" in format:
         field, value = format.split("!=")
         field, value = field.strip(), value.strip()

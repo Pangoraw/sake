@@ -75,10 +75,10 @@ class Experiment(object):
             return f"{value:.3f}"
         return value
 
-    def get_params(self, select=[]):
+    def get_params(self, select=[], show_all=False):
         items, _ = self._select(self.params, select)
         values = [f"{key}: {self._present_value(value)}" for key, value in items]
-        return self._present(values)
+        return self._present(values, num_values=10000 if show_all else None)
 
     def get_keys(self):
         metrics = self.get_metrics()
@@ -92,7 +92,7 @@ class Experiment(object):
         metrics = sorted(items, key=lambda x: -int(x[0] == name))
         return metrics
 
-    def get_metrics(self, select=[]):
+    def get_metrics(self, select=[], show_all=False):
         if self.checkpoints is None:
             return "0 checkpoints"
         name, checkpoint = self.get_best_checkpoint()
@@ -103,7 +103,12 @@ class Experiment(object):
             f"{key}: {self._present_value(value)}"
             for key, value in metrics
         ]
-        return self._present(values, num_values=len(items) if selected else None)
+        num_values = None
+        if show_all:
+            num_values = 10000
+        elif selected:
+            num_values = len(items)
+        return self._present(values, num_values=num_values)
 
     def get_best_checkpoint(self):
         metrics = {}
@@ -298,8 +303,8 @@ def show_experiment(args):
     console = Console()
     console.print(Panel(RenderGroup(
         Panel(f"python {expe.command}", box=box.SIMPLE, title="Command"),
-        Panel(expe.get_params(args.select), box=box.SIMPLE, title="Parameters"),
-        Panel(expe.get_metrics(args.select), box=box.SIMPLE, title="Checkpoint")
+        Panel(expe.get_params(args.select if not args.show_all else None, args.show_all), box=box.SIMPLE, title="Parameters"),
+        Panel(expe.get_metrics(args.select if not args.show_all else None, args.show_all), box=box.SIMPLE, title="Checkpoint")
     ), box=box.SIMPLE, title=f"Experiment {expe.id[:7]}"))
 
 
@@ -377,6 +382,7 @@ def parse_args():
     show = commands.add_parser("show")
     show.add_argument("id")
     show.add_argument("-s", "--select", action="append")
+    show.add_argument("-a", "--show-all", action="store_true")
     show.set_defaults(func=show_experiment)
 
     diff = commands.add_parser("diff")

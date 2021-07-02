@@ -131,6 +131,10 @@ class Experiment(object):
                 checkpoint_idx = i + 1
         return name, self.checkpoints[checkpoint_idx]
 
+    def get_best_step(self):
+        _, checkpoint = self.get_best_checkpoint()
+        return None if checkpoint is None else checkpoint["step"] 
+
     @staticmethod
     def from_file(file_path):
         with open(file_path, "r") as f:
@@ -211,6 +215,7 @@ class Filter:
             res = False
 
         return res
+
 
 def compile_filter(format):
     if " or " in format:
@@ -340,8 +345,8 @@ def diff_experiments(args):
 
     table = Table(title="Metrics", box=box.ROUNDED)
     table.add_column("Metric")
-    table.add_column(expe1.id[:7])
-    table.add_column(expe2.id[:7])
+    table.add_column(expe1.id[:7] + f" (step {expe1.get_best_step()})")
+    table.add_column(expe2.id[:7] + f" (step {expe2.get_best_step()})")
     for key in keys:
         value1, value2 = expe1.get_field(key), expe2.get_field(key)
         if value1 != value2:
